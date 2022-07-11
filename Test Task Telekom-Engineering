@@ -1,0 +1,40 @@
+import socket
+import re
+
+
+def read(s):    #функция считывания. Отбрасывает IAC запросы сервера и переносы строки
+    c = s.recv(1024)
+    if c!= b"\xff\xfb\x1f\xff\xfb \xff\xfb\x18\xff\xfb'\xff\xfd\x01\xff\xfb\x03\xff\xfd\x03" and c!= b'\r\n':
+        return c
+    else:
+        return ''.encode('utf-8')
+    
+    
+regex = re.compile('\d{4} .. \d{2}:\d{2}:\d{2}\.\d{3} ..')
+file = open("database.txt","w")
+
+
+server = socket.create_server(('127.0.0.1',2022))
+server.listen(5)
+client_socket, address = server.accept()
+client_socket.send("Введите данные в правильном формате. Для выхода напечатайте Выход. \r\n".encode('utf-8'))
+
+
+while True:   
+    inputstr = read(client_socket).decode('utf-8')
+    if inputstr=='Выход':
+        break
+    if inputstr!='':
+        if regex.match(inputstr)!=None and len(inputstr)==23:
+            file.write(inputstr+"\r\n")
+            s_data = inputstr.split()
+            if s_data[3]=='00':
+                out = "Спортсмен, нагрудный номер "+s_data[0]+" прошёл отсечку "+s_data[1]+" в "+s_data[2][0:len(s_data[2])-2]+"\r\n"
+                print(out)
+                client_socket.send(out.encode('utf-8'))
+        else:
+            client_socket.send("Не правильный формат данных\r\n".encode('utf-8'))
+
+
+file.close()
+client_socket.close()
