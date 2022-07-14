@@ -1,0 +1,329 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Sep 11 13:38:33 2020
+
+@author: ge57cel
+"""
+from numpy import exp
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+ax = plt.subplots()
+from matplotlib.ticker import AutoMinorLocator
+from lmfit import Model
+import matplotlib.ticker as ticker
+from lmfit.models import GaussianModel, LinearModel
+g = (2*math.pi)**0.5
+
+fontsiz = 24
+chi_borders = [-85,85]
+step = 10000
+x_for_gauss = np.linspace(chi_borders[0], chi_borders[1],500)
+
+def colornormalization(cols_sc):
+        cols = []
+        for i in cols_sc:
+            mytuple = []
+            for idx, j in enumerate(i):
+                mytuple.append(j / 255.)
+            cols.append(mytuple)
+        return cols
+    
+colors_rgb=[(166,97,26),(223,194,125),(128,205,193),(1,133,113)]
+colors_rgb0 = [(204,235,197),(168,221,181),(123,204,196),(78,179,211),(43,140,190),(8,88,158)]
+colors_rgb_g = [(153,216,201),(102,194,164),(65,174,118),(35,139,69),(0,109,44),(0,68,27)] #green
+colors_rgb2 = [(254,240,217),(253,212,158),(253,187,132),(252,141,89),(227,74,51),(179,0,0)] 
+colors_rgb_p = [(201,148,199),(223,101,176),(231,41,138),(206,18,86),(152,0,67),(103,0,31)]
+colors = colornormalization(colors_rgb_p)
+color_points = colornormalization([(67, 125, 212)])
+color_graphs = colornormalization([(168, 240, 0),(67, 125, 212),(193, 0, 135),(12,242,175),(245,82,0)])
+
+def gaussian_model(x,y0,A,xc,w):
+    return y0+A*exp(-(x-xc)**2/(2*w**2))
+
+def fi_gaussian_model(x,y0,A,xc,w,A2,xc2,w2,A3,xc3,w3,A4,xc4,w4,A5,xc5,w5):
+    return y0+A*exp(-(x-xc)**2/(2*w**2))+A2*exp(-(x-xc2)**2/(2*w2**2))+A3*exp(-(x-xc3)**2/(2*w3**2))+A4*exp(-(x-xc4)**2/(2*w4**2))+A5*exp(-(x-xc5)**2/(2*w5**2))
+
+def create_plot(i = 0):
+    sty = 'tableau-colorblind10'
+    plt.style.use([sty])
+    fig = plt.figure()
+    if i == 0:    
+        plt.rc('ytick',labelsize=0, color = "white")
+    else:
+        plt.rc('ytick',labelsize=19, color = "black")
+    ax = fig.add_subplot(1, 1, 1)
+    ax.grid(False)
+    fig.patch.set_facecolor('xkcd:white')
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.tick_params(axis = 'both', which = 'major', direction='in', length=6, width=2, colors='k', grid_color='k', grid_alpha=0.8)
+    ax.tick_params(axis = 'both', which = 'minor', direction='in', length=3, width=1.5, colors='k', grid_color='k', grid_alpha=0.8)
+    plt.rc('xtick',labelsize=19)
+
+def cut_x(x,res):
+    dif = (x[11]-x[10])*5
+    for i in range(0,len(x)-1):
+        if x[i+1]-x[i]>dif and np.isnan(x[i])!=1:
+            x[i+1] = np.nan
+            x[i] = np.nan
+            res[i+1] = np.nan
+            res[i] = np.nan
+    return res    
+
+def plot_fit(x,y,y0i,Ai,xci,wi,A2i,xc2i,w2i,k,name):
+    x_for_fit = np.linspace(chi_borders[0],chi_borders[1],1500)
+    modg = GaussianModel(prefix = 'g1_')+LinearModel(prefix = 'l_')
+    moddef = GaussianModel(prefix = 'g1__')
+    modsym = GaussianModel(prefix ='sym1_')+GaussianModel(prefix = 'sym1__')
+    pars = modg.make_params()
+    pars['g1_amplitude'].set(value=Ai, min = 0)
+    pars['g1_sigma'].set(value=wi, min=0, max = wi*2)
+    pars['g1_center'].set(value=xci, min = xci-5, max = xci+5)
+    pars.update(moddef.make_params())
+    pars['g1__amplitude'].set(value=Ai, min = 0)
+    pars['g1__sigma'].set(value=wi*2, min = 0, max = wi*8)
+    pars['g1__center'].set(expr='g1_center')
+    pars['l_intercept'].set(value=y0i, min = -1000, max = y0i*10, vary = True)
+    pars['l_slope'].set(value=0,vary = False)
+    
+    pars.update(modsym.make_params())
+    pars['sym1_amplitude'].set(value=A2i, min = 0)
+    pars['sym1_sigma'].set(value=w2i, min=0, max = w2i*2)
+    pars['sym1_center'].set(value=xc2i, min = xc2i-5, max = xc2i+5)
+    pars['sym1__amplitude'].set(expr = 'sym1_amplitude')
+    pars['sym1__sigma'].set(expr = 'sym1_sigma')
+    pars['sym1__center'].set(expr='-1*sym1_center')
+    plt.xlim(chi_borders[0],chi_borders[1])
+    mod = modsym+modg+moddef
+
+    result = mod.fit(y,pars,x=x)
+    y_for_fit = mod.eval(result.params,x=x_for_fit)
+
+    A = result.best_values["g1_amplitude"]
+    xc = result.best_values["g1_center"]
+    w = result.best_values["g1_sigma"]
+    fw = 2.3548200*result.best_values["g1_sigma"]
+
+    A2 = result.best_values["sym1_amplitude"]
+    xc2 = result.best_values["sym1_center"]
+    w2 = result.best_values["sym1_sigma"]
+    fw2 = 2.3548200*result.best_values["sym1_sigma"]
+    #wL2 = result.best_values["sym1_gamma"]
+    plt.rc('ytick',labelsize=0, color = "white")
+    plt.plot(x, np.asarray(y)+k*step, 'o', color = color_points[0], linewidth=3, alpha = 0.5)
+    #plt.plot(x, result.init_fit+k*step, 'k--', linewidth=3)
+    maxi = step*0.1
+    plt.plot(x, (result.residual+(k)*step-maxi*3.2), '-', color = "gray", markersize = 4, markerfacecolor='none', alpha = 0.5, label = "Residual")
+    print(result.fit_report())
+    plt.plot(x_for_fit,np.asarray(y_for_fit)+k*step, color = colors[k], linewidth=2.5, label=name)
+    return A/w/g, fw, xc, result.params["g1_amplitude"].stderr/w/g, result.params["g1_fwhm"].stderr, result.params["g1_center"].stderr, \
+        A2/w2/g, fw2, xc2, result.params["sym1_sigma"].stderr/w/g, result.params["sym1_fwhm"].stderr, result.params["sym1_center"].stderr
+
+def plot_dependance2(x, y, err, label,  y2, err2, label2, yname,xname,name,bor1,bor2,axs):
+    plt.rc('ytick',labelsize=fontsiz-5, color = "white")
+    axs.yaxis.set_minor_locator(AutoMinorLocator(5))
+    axs.errorbar(x, y, yerr=err, linewidth=2.5, color = color_graphs[2], label="" + label + "")
+    axs.errorbar(x, y2, yerr=err2, linewidth=2.5, color = color_graphs[1], label="" + label2 + "")
+
+    axs.set_ylabel(yname, fontsize = fontsiz-10)
+    axs.set_xlabel(xname, fontsize = fontsiz)
+    axs.xaxis.set_minor_locator(AutoMinorLocator(10))
+    if yname=="Position (\N{DEGREE SIGN})":
+        plt.text(75,20,label,fontsize=12, size = 15, rotation = 0, verticalalignment = "top")
+        plt.text(75,80,label2,fontsize=12, size = 15, rotation = 0, verticalalignment = "top")
+    
+    plt.tight_layout()
+    plt.savefig(name, dpi = 300) 
+ 
+def create_subplots():
+    sty = 'tableau-colorblind10'
+    plt.style.use([sty])
+    fig,axs = plt.subplots(3, sharex=True, gridspec_kw={'hspace': 0})
+    fig.set_size_inches(5, 7)
+    for i in range(0,len(axs)):
+        axs[i].grid(False)
+        axs[i].xaxis.set_minor_locator(AutoMinorLocator(1))
+        axs[i].yaxis.set_minor_locator(AutoMinorLocator(2))
+        axs[i].tick_params(axis = 'both', which = 'major', direction='in', length=6, width=2, colors='k', grid_color='k', grid_alpha=0.8)
+        axs[i].tick_params(axis = 'both', which = 'minor', direction='in', length=3, width=1.5, colors='k', grid_color='k', grid_alpha=0.8)
+        axs[i].tick_params(axis = 'y', labelsize = fontsiz-10)
+        axs[i].tick_params(axis = 'x', labelsize = fontsiz-2)
+        axs[i].label_outer()
+    fig.patch.set_facecolor('xkcd:white')
+    plt.rc('xtick',labelsize=fontsiz-2)
+    plt.rc('ytick',labelsize=fontsiz-5)
+    return axs    
+
+def plot_parameters(results0=None,results1=None,results2=None,results3=None,results4=None,results5=None):
+    temp = [50,58,66,82,90]
+    n = 1
+    i = 0
+    Am = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    Ammax = Am[0]
+    i = 1
+    fwhm = np.asarray([n*results0[i],n*results1[i],n*results2[i],n*results3[i],n*results4[i]])
+    i = 2
+    pos = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    i = 3
+    Amerr = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    i = 4
+    fwhmerr = np.asarray([n*results0[i],n*results1[i],n*results2[i],n*results3[i],n*results4[i]])
+    i = 5
+    poserr = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    i = 6
+    Am2 = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    Ammax2 = Am2[0]
+    i = 7
+    fwhm2 = np.asarray([n*results0[i],n*results1[i],n*results2[i],n*results3[i],n*results4[i]])
+    i = 8
+    pos2 = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    i = 9
+    Amerr2 = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+    i = 10
+    fwhmerr2 = np.asarray([n*results0[i],n*results1[i],n*results2[i],n*results3[i],n*results4[i]])
+    i = 11
+    poserr2 = np.asarray([results0[i],results1[i],results2[i],results3[i],results4[i]])
+
+    Ammax = max(Ammax,Ammax2)
+    axes = create_subplots()
+    axes[0].xaxis.set_major_locator(ticker.MultipleLocator(10))
+    axes[1].xaxis.set_major_locator(ticker.MultipleLocator(10))
+    axes[2].xaxis.set_major_locator(ticker.MultipleLocator(10))
+    axes[0]
+    plot_dependance2(temp,Am/Ammax,Amerr/Ammax,"Inner reflex",Am2/Ammax,Amerr2/Ammax,"Outer reflex","Intensity (norm.units)","Temperature (\N{DEGREE SIGN}C)","AmplitudeMAPI",49,91,axes[0])
+    axes[1]
+    plot_dependance2(temp,fwhm,fwhmerr,"Inner reflex",fwhm2,fwhmerr2,"Outer reflex","FWHM(\N{DEGREE SIGN})","Temperature (\N{DEGREE SIGN}C)","FWHMMAPI",49,91,axes[1])
+    axes[2]
+    plot_dependance2(temp,pos,poserr,"Inner reflex",pos2,poserr2,"Outer reflex","Position (\N{DEGREE SIGN})","Temperature (\N{DEGREE SIGN}C)","PosMAPI",49,91,axes[2])
+  
+
+def cut_borders(x,y,k):
+    dnumbers = []
+    count = len(y)
+    #cutting the borders
+    for i in range(0,count):
+        if float(x[i])>chi_borders[1] or float(x[i])<chi_borders[0]:
+            dnumbers.append(i) 
+        y[i] = y[i]
+    for i in range(0, len(dnumbers)):
+        x.pop(dnumbers[len(dnumbers)-i-1])
+        y.pop(dnumbers[len(dnumbers)-i-1])
+
+def get_x(name):
+    m1 = []
+    f1 = open(name,'r')
+    for line in f1:
+        p1 = line.split("	")
+        V = p1[0].split("e")
+        c1 = (float(V[0])*10**float(V[1]))
+        m1.append(float(c1))
+    return m1
+
+def get_y(name):
+    m1 = []
+    f1 = open(name,'r')
+    for line in f1:
+        p1 = line.split("	")
+        I = p1[1].split("e")
+        c2 = (float(I[0])*10**float(I[1]))
+        if (float(c2)!=0):
+            m1.append(float(c2))
+        else:
+            m1.append(float(-1))
+    return m1
+
+dataname0 = 't_14_tc.txt'
+name0 = dataname0.replace('.txt', '')
+dataname1 = 't_11_tc.txt'
+name1 = dataname1.replace('.txt', '')
+dataname2= 't_9_tc.txt'
+name2 = dataname2.replace('.txt', '')
+dataname3 = 't_12_tc.txt'
+name3 = dataname3.replace('.txt', '')
+dataname4 = 't_22_tc.txt'
+name4 = dataname4.replace('.txt', '')
+dataname5 = 't_20_tc.txt'
+name5 = dataname5.replace('.txt', '')
+
+x0 = get_x(dataname0)
+y0 = get_y(dataname0)
+x1 = get_x(dataname1)
+y1 = get_y(dataname1)
+x2 = get_x(dataname2)
+y2 = get_y(dataname2)
+x3 = get_x(dataname3)
+y3 = get_y(dataname3)
+x4 = get_x(dataname4)
+y4 = get_y(dataname4)
+x5 = get_x(dataname5)
+y5 = get_y(dataname5)
+
+cut_borders(x0,y0,0)
+cut_borders(x1,y1,1)
+cut_borders(x2,y2,2)
+cut_borders(x3,y3,3)
+cut_borders(x4,y4,4)
+cut_borders(x5,y5,5)
+
+#treating first image
+"""count = len(y0)-1
+for i in range (0,count):
+    if float(y0[i])<0:
+        dnumbers.append(i) 
+
+#cutting detector's gap
+dnumbers.insert(0,dnumbers[0]-1) 
+dnumbers.insert(len(dnumbers),dnumbers[len(dnumbers)-1]+1)       
+for i in range(0, len(dnumbers)):
+    x0.pop(dnumbers[len(dnumbers)-i-1])
+    y0.pop(dnumbers[len(dnumbers)-i-1])
+"""
+    
+ma = max(y5)
+mi = min(y0)
+
+plt.ylabel("Intensity (arb.units)",  fontsize=24)
+plt.xlabel("\u03C7 (\N{DEGREE SIGN})", fontsize=24)
+
+gmodel = Model(gaussian_model)
+result = gmodel.fit(y0, x=x0, y0 = 513, A=24000, xc = -0.25970250, w=5)
+y01 = result.best_values["y0"]
+A1 = result.best_values["A"]
+xc1 = result.best_values["xc"]
+w1 = result.best_values["w"]
+
+plt.rc('ytick',labelsize=0, color = "white")
+def T_caption(loc,offset,sizet,fontsizet = fontsiz-5):
+    plt.text(loc,offset+step*0.6,"50 \N{DEGREE SIGN}C",fontsize=fontsizet, size = sizet, rotation = 0, verticalalignment = "top")
+    plt.text(loc,offset+step*1.6,"58 \N{DEGREE SIGN}C",fontsize=fontsizet, size = sizet, rotation = 0, verticalalignment = "top")
+    plt.text(loc,offset+step*2.6,"66 \N{DEGREE SIGN}C",fontsize=fontsizet, size = sizet, rotation = 0, verticalalignment = "top")
+    plt.text(loc,offset+step*3.6,"74 \N{DEGREE SIGN}C",fontsize=fontsizet, size = sizet, rotation = 0, verticalalignment = "top")
+    plt.text(loc,offset+step*4.6,"82 \N{DEGREE SIGN}C",fontsize=fontsizet, size = sizet, rotation = 0, verticalalignment = "top")
+    plt.text(loc,offset+step*5.6,"90 \N{DEGREE SIGN}C",fontsize=fontsizet, size = sizet, rotation = 0, verticalalignment = "top")
+
+fig = plt.gcf()
+fig.set_size_inches(5, 7)
+ax = plt.gca()
+ax.yaxis.set_major_locator(ticker.MultipleLocator(5000))
+ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+ax.axes.yaxis.set_ticklabels([])
+ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+ax.xaxis.set_minor_locator(AutoMinorLocator(10))
+ax.tick_params(axis = 'both', which = 'major', direction='in', length=6, width=2, colors='k', grid_color='k', grid_alpha=0.8)
+ax.tick_params(axis = 'both', which = 'minor', direction='in', length=3, width=1.5, colors='k', grid_color='k', grid_alpha=0.8)
+results5 = plot_fit(x5,y5,100,50000,0,4,10000,84,5,5,"90 \N{DEGREE SIGN}C")
+results4 = plot_fit(x4,y4,50,5000,0,4,10000,84,5,4,"82 \N{DEGREE SIGN}C")
+results3 = plot_fit(x3,y3,100,50000,0,4,10000,84,5,3,"74 \N{DEGREE SIGN}C")
+results2 = plot_fit(x2,y2,100,50000,0,4,10000,84,5,2,"66 \N{DEGREE SIGN}C")
+results1 = plot_fit(x1,y1,100,50000,0,4,10000,84,5,1,"58 \N{DEGREE SIGN}C")
+results0 = plot_fit(x0,y0,100,50000,0,4,10000,84,5,0,"50 \N{DEGREE SIGN}C")
+
+plt.tight_layout()
+ax = plt.gca()
+ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+ax.xaxis.set_major_locator(ticker.MultipleLocator(25))
+plt.savefig(name0, dpi = 300)
+
+
+plot_parameters(results0,results1,results2,results3,results4,results5)
