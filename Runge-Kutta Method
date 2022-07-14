@@ -1,0 +1,220 @@
+# -*- coding: utf-8 -*-
+"""
+Spyder Editor
+
+This is a temporary script file.
+"""
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+
+m = 0.0005 #масса зерна
+mu = 0.35 #коэффициент трения между зерном и валом
+R1 = 0.06 #радиус вала
+R2 = 0.001 #радиус зерна
+d = 0.00025 #расстоняие между крайними точками вала
+g = 9.8 #ускорение свободного падения
+w = 0.5 #угловая скорость вращения вала
+
+sigma1 = 0.25 #коэффициент Пуассона вала
+sigma2 = 0.5 #коэффициент Пуассона зерна
+E1 = 200.0*10**9 #Модуль Юнга вала
+E2 = 40.0*10**6 #Модуль Юнга зерна
+Sz = np.pi*R2**2 #попереченая площадь зерна
+Predel = 5.5*10**6 #предел прочности зерна
+Cond = Predel*Sz #условие разрешения Паскаль
+
+Du = 3./4.*((1.0-sigma1**2.)/E1+(1.0-sigma2**2.)/E2)
+
+ystart = ((R1+R2)**2-(R1+d/2)**2)**0.5
+h = ystart
+
+def colornormalization(cols_sc):
+        cols = []
+        for i in cols_sc:
+            mytuple = []
+            for idx, j in enumerate(i):
+                #print(i, idx, j, "jj")
+                mytuple.append(j / 255.)
+                # cols[i][idx]=j
+            cols.append(mytuple)
+        return cols
+
+
+colors_rgb_g = [(153,216,201),(102,194,164),(65,174,118),(35,139,69),(0,109,44),(0,68,27)] #green
+colors = colornormalization(colors_rgb_g)
+
+boolean = input("Построить для стандартных значений? Написать + или -:")
+if boolean == ("-"):
+    m = float(input("Масса зерна в кг: "))
+    mu = float(input("Коэффициент трения между зерном и валом: "))
+    R1 = float(input("Радиус вала в м: "))
+    R2 = float(input("Радиус зерна в м: "))
+    d = float(input("Расстояние между крайними точками вала в м: "))
+    w = float(input("Угловая скорость вращения вала в об/с: "))
+    sigma1 = float(input("Коэффициент Пуассона вала: "))
+    sigma2 = float(input("Коэффициент Пуассона зерна: "))
+    E1 = float(input("Модуль Юнга вала в ГПа: "))*10**9
+    E2 = float(input("Модуль Юнга зерна в МПа: "))*10**6
+    Predel = float(input("Предел прочности зерна в МПа: "))*10**6
+    h = float(input("Расстояние от раздатчика зерна до места контакта зерна и вала в м:"))
+Cond = Predel*Sz
+
+def sinth(y):
+    return y/(y**2.0+(R1+d/2.0)**2.0)**0.5
+
+def costh(y):
+    return (R1+d/2.)/(y**2.+(R1+d/2.)**2.)**0.5    
+
+def f1(y,yd,t): #первая производная
+    return yd
+
+negy = []
+negt = []
+def f2(y,yd,t): #f2 первая производная
+    if (abs(y)<ystart):
+        if (abs(yd)<w*((R1+d/2.)**2.+y**2)**0.5 or y<0):
+            return (-m*g-2.*(mu*costh(y)-sinth(y))*((R1+R2)-((R1+d/2.)**2.+y**2.)**0.5)**1.5/(Du**2*(1/R1+1/R2))**0.5)/m #x2
+        else:
+            negy.append(y)
+            negt.append(t)
+            return (-m*g+2.*sinth(y)*((R1+R2)-((R1+d/2.)**2.+y**2.)**0.5)**1.5/(Du**2*(1/R1+1/R2))**0.5)/m
+    else:
+        return -g
+
+
+def RK4(dt):
+    yl = ystart
+    zl = -1*(2*(h-ystart)/g)**0.5
+    ystorage = []
+    ydstorage = []
+    tstorage = []
+    t = 0
+    i=0
+    condition = 0
+    tcrit,ycrit = 0,0
+    while (abs(yl)<=abs(ystart*0.95) or (yl>0)) and (i<100000):
+        #print(yl)
+        if (condition==0) and (costh(yl)*((R1+R2)-((R1+d/2.)**2.+yl**2.)**0.5)**1.5/(Du**2*(1/R1+1/R2))**0.5)>Cond:
+            condition = 1
+            print("Зерно разрушилось на y = " +str(yl)+ " в момент t = " +str(t+2*((h-ystart)/g)**0.5)+ " сек")
+            tcrit = t
+            ycrit = yl
+        ystorage.append(yl)
+        ydstorage.append(zl)
+        tstorage.append(dt*i)
+        k11 = dt*f1(yl,zl,t)
+        k21 = dt*f2(yl,zl,t)
+        k12 = dt*f1(yl+0.5*k11,zl+0.5*k21,t+0.5*dt)
+        k22 = dt*f2(yl+0.5*k11,zl+0.5*k21,t+0.5*dt)
+        k13 = dt*f1(yl+0.5*k12,zl+0.5*k22,t+0.5*dt)
+        k23 = dt*f2(yl+0.5*k12,zl+0.5*k22,t+0.5*dt)
+        k14 = dt*f1(yl+k13,zl+k23,t+dt)
+        k24 = dt*f2(yl+k13,zl+k23,t+dt)
+        yl = yl+ (k11+2.*k12+2.*k13+k14)/6
+        zl = zl + (k21+2.*k22+2.*k23+k24)/6
+        t = t + dt
+        i=i+1
+    return tstorage,ystorage,tcrit,ycrit
+
+def RKfreq(dt):
+    yl = ystart
+    zl = -1*(2*(h-ystart)/g)**0.5
+    ystorage = []
+    ydstorage = []
+    tstorage = []
+    t = 0
+    i=0
+    condition = 0
+    tcrit,ycrit = 0,0
+    while (abs(yl)<=abs(ystart*0.95) or yl>0) and (i<100000):
+        #print(yl)
+        if (condition==0) and (costh(yl)*((R1+R2)-((R1+d/2.)**2.+yl**2.)**0.5)**1.5/(Du**2*(1/R1+1/R2))**0.5)>Cond:
+            condition = 1
+            print("Критическая скорость вращения вала = " +str(-1.0*float(zl*costh(yl)/R1))+" об/c")
+            tcrit = t
+            ycrit = yl     
+            dcrit = 2*(R2-1.0*(Cond*(Du**2*(1.0/R1+1.0/R2))**0.5)**(2./3.))
+            print("Максимальное возможное расстояние между валами, при котором зерно еще крушится = " +str(dcrit)+ " м")
+
+        ystorage.append(yl)
+        ydstorage.append(zl)
+        tstorage.append(dt*i)
+        k11 = dt*f1(yl,zl,t)
+        k21 = dt*f2(yl,zl,t)
+        k12 = dt*f1(yl+0.5*k11,zl+0.5*k21,t+0.5*dt)
+        k22 = dt*f2(yl+0.5*k11,zl+0.5*k21,t+0.5*dt)
+        k13 = dt*f1(yl+0.5*k12,zl+0.5*k22,t+0.5*dt)
+        k23 = dt*f2(yl+0.5*k12,zl+0.5*k22,t+0.5*dt)
+        k14 = dt*f1(yl+k13,zl+k23,t+dt)
+        k24 = dt*f2(yl+k13,zl+k23,t+dt)
+        yl = yl+ (k11+2.*k12+2.*k13+k14)/6
+        zl = zl + (k21+2.*k22+2.*k23+k24)/6
+        t = t + dt
+        i=i+1
+    return tstorage,ystorage,tcrit,ycrit
+    
+t,y,tcrit,ycrit = RK4(0.00001)
+w = 9999999999999
+RKfreq(0.00001)
+plt.plot(t,y, label = "Вертикальная координата зерна от времени")
+plt.plot(tcrit,ycrit,"o", label = "Координата разрыва зерна")
+plt.xlabel("t (sec)")
+plt.ylabel("y (m)")
+plt.legend(loc = "lower left")
+plt.ioff()
+plt.show()
+
+#расчет угла защемления
+figang = plt.figure()
+numbpoint = 1000
+locr = R1 #локальная переменная для d
+for i in range(0, 6):
+    x = np.linspace(0,2*R2,numbpoint)
+    y = np.arccos((locr+x/2)/(locr+R2))*180/np.pi
+    plt.plot(x*1000,y, color = colors[i], label = "R вала = "+str(round(locr,2))+"м")
+    locr = locr+0.1*R1
+plt.xlabel("Расстояние между валами (мм)")
+plt.ylabel("Угол защемления (\N{DEGREE SIGN})")
+plt.legend(loc = "lower left")
+plt.show()
+plt.savefig('Угол защемления.jpg', dpi = 300)
+
+#расчет начальной координаты зерна
+figcoor = plt.figure()
+numbpoint = 1000
+locr = R1 #локальная переменная для d
+for i in range(0, 6):
+    x = np.linspace(0,2*R2,numbpoint)
+    y = ((locr+R2)**2-(locr+x/2)**2)**0.5
+    plt.plot(x*1000,y*1000, color = colors[i], label = "R вала = "+str(round(locr,2))+"м")
+    locr = locr+0.1*R1
+plt.xlabel("Расстояние между валами (мм)")
+plt.ylabel("Начальная координата зерна (мм)")
+plt.legend(loc = "lower left")
+plt.show()
+plt.savefig('Начальная координата зерна.jpg', dpi = 300)
+
+#координата разрушения
+figcoordestr = plt.figure()
+numbpoint = 1000
+locr = R1 #локальная переменная для d
+for i in range(0, 6):
+    x = np.linspace(0,2*R2,numbpoint)
+    y = ((-1*(Du*(1/locr+1/R2)**0.5*Cond)**(2./3.)+R2+locr)**2-(x/2+locr)**2)**0.5
+    plt.plot(x*1000,y*1000, color = colors[i], label = "R вала = "+str(round(locr,2))+"м")
+    locr = locr+0.1*R1
+plt.xlabel("Расстояние между валами (мм)")
+plt.ylabel("Координата разрушения зерна (мм)")
+plt.legend(loc = "lower left")
+plt.show()
+plt.savefig('Координата разрушения зерна.jpg', dpi = 300)
+
+figgap = plt.figure()
+x = np.linspace(0,2*R1,numbpoint)
+y = 2*R2-2*(Cond*Du*(1/x+1/R2)**0.5)**(2./3.)
+plt.plot(x*1000,y*1000, color = colors[5])
+plt.ylabel("Максимальный возможный зазор (мм)")
+plt.xlabel("Радиус вала (мм)")
+plt.show()
+plt.savefig('Зазор.jpg', dpi = 300)
