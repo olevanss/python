@@ -1,0 +1,244 @@
+import scipy.io
+import numpy as np
+import matplotlib.pyplot as plt
+from adjustText import adjust_text
+
+def qx_mw(q, wl = 0.99267):
+    k = 2*np.pi/wl
+    return q*np.cos(1/2*(np.pi-2*np.arcsin(q/(2*k))))
+
+def plotHKL(mat, color="green", ax=None, structure=None, xlim = 2.318, ylim = 2.767, nxlim = -1.54, wl = 0.99267, size = '5'):
+    if structure:
+        files = {"mapi": 'C:/Users/Andi/Desktop/bachelor data/XRD/exported reflection data/Stoumpos_MAPI_beta_tetragonal_I4cm_MANUEL.txt',
+                 "pbi2": 'C:/Users/Andi/Desktop/bachelor data/XRD/exported reflection data/PbI2_wyckoff_P-3m1_9009114.txt',
+                 "pbi2nobar": 'C:/Users/Andi/Desktop/bachelor data/XRD/exported reflection data/PbI2_wyckoff_P3m1_9009141.txt'}
+        check = np.genfromtxt(files[structure], skip_header=1, usecols=(7,8))
+        existence = [entry[0] for entry in check]
+        existence = [TtoQ(val, wl = 1.5406) for val in existence]
+    
+    
+    hkl_data = scipy.io.loadmat(mat)
+    diff_dat = hkl_data['diffractionPos'][0][0]
+    q_ref = diff_dat[7]
+    qr = [np.sqrt(q[0]**2+q[1]**2) for q in q_ref]
+    qz = [q[2] for q in q_ref]
+    q = list(zip(qr,qz))
+    
+    hkl_data = scipy.io.loadmat(mat)
+    diff_dat = hkl_data['diffractionPos'][0][0]
+    q_ref = diff_dat[7]
+    qr = [np.sqrt(q[0]**2+q[1]**2) for q in q_ref]
+    qz = [q[2] for q in q_ref]
+    q = list(zip(qr,qz))
+    i = []
+    hkls = diff_dat[3]
+    hkls = [h[0] for h in hkls]
+    one_hkl = [h[-1] for h in hkls]
+    for entry in q:
+        i.append(q.index(entry))
+    selected_hkl = [one_hkl[j] for j in i]
+    
+    count = 0
+    numbers_for_deleting = []
+    for hkl in selected_hkl:
+        summ = 0
+        string = r''
+        for index in hkl:
+            if index < 0:
+                string += "-" + str(-index)
+            else:
+                string += str(index)
+            summ = summ+index
+        if summ%2==1:
+            numbers_for_deleting.append(count)
+        count=count+1
+
+    qabs = [np.sqrt(p[0]**2+p[1]**2) for p in q]
+    remove = []
+    dev = []
+    
+    # check with vesta data if reflex exists
+    tol = 0.05 # 0.07 is good
+    # tol = 0.08
+    if structure:
+        for p in qabs:
+            found = False
+            
+            if p > qabs[-1]: found = True; print('oh');
+            if found == False:
+                for val in existence:
+                    if p > val-tol and p < val+tol: found = True
+                if found == False:
+                    remove.append(qabs.index(p))
+                    dev.append(p-val)
+        removeelements = [q[i] for i in remove]
+        for e in removeelements:
+            q.remove(e)  
+            
+    count = 0
+    if ax and color!="magenta" and color!="cyan" and color!="blue" and color!="red":
+        for p in q:
+            if -p[0] > nxlim and p[1] < ylim:
+                if p[0] > qx_mw(p[1])-0.05 and p[0] < qx_mw(p[1])+0.05:
+                    x = np.linspace(-qx_mw(p[1]), qx_mw(p[1]), 20)
+                    radius = np.sqrt(p[0]**2+p[1]**2)
+                    calcy = lambda x: np.sqrt(radius**2 - x**2)
+                    y = [calcy(e) for e in x]
+                    ax.plot(x,y, ':', color = color, linewidth = 1)
+                    ax.plot(0, np.sqrt(p[0]**2+p[1]**2), 'o', markerfacecolor = 'black', markeredgecolor = color , markersize = size, markeredgewidth = 1.5)
+                else:
+                    if not count in (numbers_for_deleting):
+                        ax.plot(-p[0], p[1], 'o', markerfacecolor = 'None', markeredgecolor = color , markersize = size, markeredgewidth = 1.5)
+            count = count+1
+        count = 0
+        for p in q:
+            if p[0] < xlim and p[1] < ylim and not(p[0] > qx_mw(p[1])-0.05 and p[0] < qx_mw(p[1])+0.05) and not count in (numbers_for_deleting):
+                ax.plot(p[0], p[1], 'o', markerfacecolor = 'None', markeredgecolor = color , markersize = size, markeredgewidth = 1.5)
+            count = count+1
+    else:
+        for p in q:
+            if -p[0] > nxlim and p[1] < ylim:
+                if p[0] > qx_mw(p[1])-0.05 and p[0] < qx_mw(p[1])+0.05:
+                    x = np.linspace(-qx_mw(p[1]), qx_mw(p[1]), 20)
+                    radius = np.sqrt(p[0]**2+p[1]**2)
+                    calcy = lambda x: np.sqrt(radius**2 - x**2)
+                    y = [calcy(e) for e in x]
+                    ax.plot(x,y, ':', color = color, linewidth = 1)
+                    ax.plot(0, np.sqrt(p[0]**2+p[1]**2), 'o', markerfacecolor = 'black', markeredgecolor = color , markersize = size, markeredgewidth = 1.5)
+                else:
+                    ax.plot(-p[0], p[1], 'o', markerfacecolor = 'None', markeredgecolor = color , markersize = size, markeredgewidth = 1.5)
+            count = count+1
+        count = 0
+        for p in q:
+            if p[0] < xlim and p[1] < ylim and not(p[0] > qx_mw(p[1])-0.05 and p[0] < qx_mw(p[1])+0.05):
+                ax.plot(p[0], p[1], 'o', markerfacecolor = 'None', markeredgecolor = color , markersize = size, markeredgewidth = 1.5)
+            count = count+1
+    
+    return q  
+  
+
+def hkl_with_indices(dif,ax,color):
+    q_pos = plotHKL(dif, ax=ax, structure = None, color = color, xlim = 2.318, ylim = 2.767)
+    hkl_data = scipy.io.loadmat(dif)
+    diff_dat = hkl_data['diffractionPos'][0][0]
+    q_ref = diff_dat[7]
+    qr = [np.sqrt(q[0]**2+q[1]**2) for q in q_ref]
+    qz = [q[2] for q in q_ref]
+    q = list(zip(qr,qz))
+    i = []
+    hkls = diff_dat[3]
+    hkls = [h[0] for h in hkls]
+    one_hkl = [h[-1] for h in hkls]
+    for entry in q_pos:
+        i.append(q.index(entry))
+    selected_hkl = [one_hkl[j] for j in i]
+    
+    # create hkl_string
+    hkl_string = []
+    for hkl in selected_hkl:
+        summ = 0
+        string = r''
+        for index in hkl:
+            if index < 0:
+                string += "-" + str(-index)
+            else:
+                string += str(index)
+            summ = summ+index
+        hkl_string.append(string)
+    pos_x = []
+    pos_y = []
+
+    for i in range(len(q_pos)):
+        if q_pos[i][0] > qx_mw(q_pos[i][1])-0.05 and q_pos[i][0] < qx_mw(q_pos[i][1])+0.05 and hkl_string[i]!='000':
+            q_pos[i] = [0, np.sqrt(q_pos[i][0]**2+q_pos[i][1]**2)]
+        pos_x.append(q_pos[i][0])
+        pos_y.append(q_pos[i][1])
+
+    a=[]
+    return pos_x,pos_y,hkl_string, a
+    
+
+def simple_plot(dif1,dif2,dif3,dif4,dif5,matfile, x=[-1.546, 2.318], y=[0, 2.767], vmin = 70, vmax = None, factor = 20, fontsize = 20, cb=False, xlim = 2.318, ylim = 2.767):
+    fig = plt.figure(figsize=(8,5))
+    [l,b,w,h] = [0.83, 0.18, 0.02, 0.8]
+    ax2 = fig.add_axes([l,b,w,h])
+    ax = fig.add_axes([0.11,0.18,0.7,0.8])
+    mat = scipy.io.loadmat(matfile)
+    data = np.asarray(mat['reshapedata'][0,0]['ImData'])
+
+    # replace NaN by 0
+    data = np.nan_to_num(data)
+    
+    # color map range
+    if vmax:
+        vmax = vmax
+    else:
+        vmax = np.max(data)/factor # kann man noch besser machen denke ich mit histogramm oder maske, 85 für pbi, 10 für mapi# print(vmax)
+    
+    # read qz and qr
+    lenQz = len(data)
+    lenQr = len(data[0])
+    qz = np.linspace(y[0], y[1], lenQz)
+    qr = np.linspace(x[0], x[1], lenQr)
+
+    
+    # plot qz vs qr
+
+    qr, qz = np.meshgrid(qr, qz)
+    image = ax.pcolormesh(qr, qz, np.nan_to_num(np.log10(data)), cmap = 'inferno', vmin = vmin, vmax = vmax)
+    ax.tick_params(direction='inout', length=7,  grid_alpha=0.8, labelsize = fontsize-5)
+    cbar = fig.colorbar(image, cmap = 'inferno', cax=ax2, fraction=0.046, pad=0.04)#shrink = 0.715, fraction=0.15
+    cbar.ax.tick_params(labelsize=fontsize-5)
+    
+    # ax = plt.gca()"""
+    ax.set_aspect('equal')
+    ax.set_xlabel('$q\mathregular{_{r}}$ (\u212B${^{-1}}$)', fontsize = fontsize)
+    ax.set_ylabel('$q\mathregular{_{z}}$ (\u212B${^{-1}}$)', fontsize = fontsize)
+    ax.set_xlim(x[0], x[1])
+    ax.set_ylim(y[0], y[1])
+    ax.set_xticks([-1.5,-1,-0.5,0,0.5,1,1.5,2])
+    
+    name = "Reflex picture.png"
+
+    plt.subplots_adjust(bottom=0.3, top=0.95)
+    
+    text = []
+    strings_for_deleting=[]
+    pos_x,pos_y,hkl_string, string_for_deleting = hkl_with_indices(dif1, ax,"cyan")
+    for xcoord,ycoord,z in zip(pos_x,pos_y,hkl_string):
+        if xcoord < xlim and ycoord < ylim and z!="000" and z.count("-")<1 and not (z in strings_for_deleting):
+            text.append(plt.text(xcoord,ycoord,z, color = "white")) 
+
+    adjust_text(text, force_points=0.1, arrowprops=dict(arrowstyle="-", color='r', lw=0.0))        
+    
+    plt.subplots_adjust(bottom=0.3, top=0.95)
+
+    
+    plt.savefig(name, dpi=600, transparent = True)
+    return ax
+    
+def plot():
+    braggfile = "PbI2 with a minus.mat"
+    bragg = scipy.io.loadmat(braggfile)
+    print(bragg.keys())
+    print(type(bragg['diffractionPos']))
+    print(bragg['diffractionPos'].shape)
+    print(bragg['diffractionPos'][0][0])
+    print(type(bragg['diffractionPos'][0][0]))
+    print(bragg['diffractionPos'].dtype)
+    print(bragg['diffractionPos'][0][0][7])
+
+
+dataname1 = "tetragonal 205 7-7.mat" #cyan
+dataname2 = "tetragonal 021 10-10.mat" #blue
+dataname3 = "tetragonal 111.mat" #red
+dataname4 = "pbi- 001.mat" #magenta
+dataname5 = "tetragonal 205 7-7.mat" #green
+
+simple_plot(dataname1,dataname2,dataname3,dataname4,dataname5,"m2_picture.mat", vmax = 3.5, cb=True, vmin=1.5, factor=150, fontsize=20)
+
+fig = plt.gcf()
+
+dataname = "MAPI 205.png"
+
+plt.savefig(dataname, dpi=300, transparent = True)
