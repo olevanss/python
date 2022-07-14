@@ -1,0 +1,215 @@
+# -*- coding: utf-8 -*-
+"""
+Spyder Editor
+
+This is a temporary script file.
+"""
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+
+g = 9.8 #ускорение свободного падения, м/с^2
+rho = 1.2754 #плотность воздуха, кг/м^3
+mu = 18.1*10**(-6) #динамическая вязкость воздуха при 20 градусах Цельсия, Па*с
+cf = 0.84 # аэродинамический коэффициент для цилиндров
+
+class seed:
+    x = 0
+    y = 0
+    xd = 0
+    yd = 0
+    xstor = []
+    ystor = []
+    xdstor = []
+    ydstor = []
+    name = "Зерно"
+    mass = 0.00004 # масса, кг
+    R = 0.0028 # радиус, кг
+    d = 0.0064 # длина, кг
+    rho = 1400 # плотность кг/м^3
+    mass =  rho*d*np.pi*R**2
+    S = (d*np.pi*R**2)**(2./3.) # площадь сечения зерна, м^2
+    eqR = (np.pi*R**2*d*3/4/np.pi)**(1./3.) # эквивалентный радиус зерна, м
+    def __init__(self,radius,length,density):
+        self.R=radius
+        self.d=length
+        self.rho=density
+        self.S=length*2*radius
+        self.eqR=(np.pi*radius**2*length*3/4/np.pi)**(1./3.)
+        self.mass=density*length*np.pi*radius**2
+        self.ystor = []
+        self.xstor = []
+        self.ydstor = []
+        self.xdstor = []
+    def collide(self):
+        return 0
+
+class camera:
+    start = 0
+    end = 0.1
+    airspeed = 8. # скорость воздуха, м/с     
+    airangle = 10./180*np.pi # наклон первой решетки, в радианах
+    Vy = airspeed*np.cos(airangle)
+    Vx = -1*airspeed*np.sin(airangle)
+    def __init__(self,start_coor,end_coor,air_speed,stream_angle):
+        self.start=start_coor
+        self.end=end_coor
+        self.airspeed=air_speed
+        self.airangle=stream_angle/180*np.pi
+        self.Vy=air_speed*np.cos(self.airangle)
+        self.Vx=-1*air_speed*np.sin(self.airangle)
+
+s = [seed(0.0086,0.002,1200),seed(0.004,0.0008,1200)]
+
+cam = [camera(10,5,0.,0.),camera(0.1,-5.,6.,10.),camera(-5.,-10.,10.,-1*40.),camera(-10.,-15.,1.,40.)] #первый элемент - филлер для участков, где потока нет
+
+
+print("Сделать для стандартных значений? Ответить + или -")
+if input()=="-":    
+    print("Сколько типов зерен?")
+    n = input()
+    print("Сколько камер?")
+    nc = input()
+    s = []
+    cam = []
+    for i in range(0,int(n)):
+        print("Введите радиус(м), длину(м) и плотность зерна(кг/м^3) №"+str(i)+"")
+        rad,le,den = input()
+        s.append(seed(rad,le,den))
+    for i in range(0,int(nc)):
+        print("Введите стартовую координату(м), конечную координату(м), скорость(м/c) и угол воздушного потока(градусы) в камере №"+str(i)+"")
+        start_,end_,air_,angl_ = input()
+        cam.append(camera(start_,end_,air_,angl_))
+        
+        
+radii = [x.eqR for x in s]
+minR = min(radii)
+minnum = radii.index(minR)
+angles = [x.airangle for x in cam]
+maxangle = max(abs(ele) for ele in angles)
+
+ystart = [x.start for x in cam]
+yend = [x.end for x in cam]
+
+def sector_def(y):
+    for i in range(0,len(ystart)):
+        if y<ystart[i] and y>yend[i]:
+            return i
+    return 0
+
+phi = 0.95 #0.4-0.6 для продоолговатых предметов
+kni = 11-10*phi #коэффициент неидеальности
+Ar = (minR*2)**(3)*g*rho*(s[minnum].rho-rho)/mu**2 #критерий Архимеда
+Revit = Ar/(18+0.575*Ar**(1./2.)) #
+Recrit = Ar/(1400+5.22*Ar**(1./2.))
+Revit = ((367+kni*Ar)**0.5-(367)**0.5)/0.588/kni
+eqVvit = (4*g*minR*2*(s[minnum].rho-rho)/(3*rho))**0.5
+porosity = (((0.588*100*minR*2*rho*kni/mu+367**(0.5))**2-367)/kni/Ar)**(1./4.75)
+print(Revit,Recrit,eqVvit,porosity)
+vvit = Revit/rho*mu/2/minR #скорость витания
+vcrit = Recrit/rho*mu/2/minR #критическая скорость
+Revvit = Revit/rho*mu/2/minR/(np.cos(maxangle)) #скорость витания с учетом угла, м/c
+Revcrit = Recrit/rho*mu/2/minR/(np.cos(maxangle)) #крит. скорость с учетом угла
+print("Скорость начала псевдоожижения:" +str(++vcrit)+ " м/c, скорость конца:"+str(vvit)+"м/c")
+
+def colornormalization(cols_sc):
+        cols = []
+        for i in cols_sc:
+            mytuple = []
+            for idx, j in enumerate(i):
+                #print(i, idx, j, "jj")
+                mytuple.append(j / 255.)
+                # cols[i][idx]=j
+            cols.append(mytuple)
+        return cols
+
+colors_rgb_g = [(153,216,201),(102,194,164),(65,174,118),(35,139,69),(0,109,44),(0,68,27)] #green
+colors = colornormalization(colors_rgb_g)
+
+def x1(x,xd,y,yd,t): #первая производная
+    return xd
+
+def x2(x,xd,y,yd,t,inseed): #f2 первая производная
+    i = sector_def(y)
+    return (-cf*rho/2/inseed.mass*inseed.S*(xd-cam[i].Vx)*((yd-cam[i].Vy)**2+(xd-cam[i].Vx)**2)**0.5)
+
+def y1(x,xd,y,yd,t): #первая производная
+    return yd
+
+def y2(x,xd,y,yd,t,inseed): #f2 первая производная 
+    i = sector_def(y)
+    return (-cf*rho/2/inseed.mass*inseed.S*(yd-cam[i].Vy)*((yd-cam[i].Vy)**2+(xd-cam[i].Vx)**2)**0.5)-g
+
+def RK4(dt,seedl):
+    yl = seedl.y
+    ydl = seedl.yd
+    xl = seedl.x
+    xdl = seedl.xd
+    tstorage = []
+    t = 0
+    i = 0
+    while (i<500):
+        seedl.ystor.append(yl)
+        seedl.ydstor.append(ydl)
+        seedl.xstor.append(xl)
+        seedl.xdstor.append(xdl)
+        tstorage.append(dt*i)
+        k11 = dt*x1(xl,xdl,yl,ydl,t)
+        k21 = dt*x2(xl,xdl,yl,ydl,t,seedl)
+        k31 = dt*y1(xl,xdl,yl,ydl,t)
+        k41 = dt*y2(xl,xdl,yl,ydl,t,seedl)
+        k12 = dt*x1(xl+0.5*k11,xdl+0.5*k21,yl+0.5*k31,ydl+0.5*k41,t+0.5*dt)
+        k22 = dt*x2(xl+0.5*k11,xdl+0.5*k21,yl+0.5*k31,ydl+0.5*k41,t+0.5*dt,seedl)
+        k32 = dt*y1(xl+0.5*k11,xdl+0.5*k21,yl+0.5*k31,ydl+0.5*k41,t+0.5*dt)
+        k42 = dt*y2(xl+0.5*k11,xdl+0.5*k21,yl+0.5*k31,ydl+0.5*k41,t+0.5*dt,seedl)
+        k13 = dt*x1(xl+0.5*k12,xdl+0.5*k22,yl+0.5*k32,ydl+0.5*k42,t+0.5*dt)
+        k23 = dt*x2(xl+0.5*k12,xdl+0.5*k22,yl+0.5*k32,ydl+0.5*k42,t+0.5*dt,seedl)
+        k33 = dt*y1(xl+0.5*k12,xdl+0.5*k22,yl+0.5*k32,ydl+0.5*k42,t+0.5*dt)
+        k43 = dt*y2(xl+0.5*k12,xdl+0.5*k22,yl+0.5*k32,ydl+0.5*k42,t+0.5*dt,seedl)
+        k14 = dt*x1(xl+k13,xdl+k23,yl+k33,ydl+k43,t+dt)
+        k24 = dt*x2(xl+k13,xdl+k23,yl+k33,ydl+k43,t+dt,seedl)
+        k34 = dt*y1(xl+k13,xdl+k23,yl+k33,ydl+k43,t+dt)
+        k44 = dt*y2(xl+k13,xdl+k23,yl+k33,ydl+k43,t+dt,seedl)
+        xl = xl+ (k11+2.*k12+2.*k13+k14)/6
+        xdl = xdl + (k21+2.*k22+2.*k23+k24)/6
+        yl = yl + (k31+2.*k32+2.*k33+k34)/6
+        ydl = ydl + (k41+2.*k42+2.*k43+k44)/6
+        t = t + dt
+        i=i+1
+    return tstorage
+
+t = []
+for x in s:
+    t.append(RK4(0.01,x))
+    plt.plot(t[s.index(x)],x.ystor, label = "Вертикальная координата зерна № " +str(s.index(x))+" от времени")
+for x in cam:
+    plt.hlines(y=x.start,xmin = min(t[0]), xmax = max(t[0]))
+plt.xlim(min(t[0]),max(t[0]))
+plt.xlabel("t (sec)")
+plt.ylabel("y (m)")
+plt.legend(loc = "lower left")
+plt.ioff()
+plt.show()
+
+#расчет угла защемления
+figang = plt.figure()
+for x in s:
+    plt.plot(x.xstor,x.ystor, label = "Траектория зерна № " +str(s.index(x))+"")
+coormin = [min(x.xstor) for x in s]
+coormax = [max(x.xstor) for x in s]
+for x in cam:
+    plt.hlines(y=x.start,xmin = min(coormin), xmax = max(coormax))
+    plt.hlines(y=x.end,xmin = min(coormin), xmax = max(coormax))
+plt.xlim(min(coormin),max(coormax))
+plt.legend(loc = "lower left")
+plt.show()
+
+figspeed = plt.figure()
+for x in s:
+    plt.plot(t[s.index(x)],(np.asarray(x.ydstor)**2+np.asarray(x.xdstor)**2)**0.5, label = "Модуль скорости зерна № " +str(s.index(x))+"")
+    plt.plot(t[s.index(x)],x.ydstor, label = "Вертикальная cкорость зерна от времени № " +str(s.index(x))+"")
+    plt.plot(t[s.index(x)],x.xdstor, label = "Горизонтальная cкорость зерна от времени № " +str(s.index(x))+"")
+plt.ylabel("Скорость, м/c")
+plt.xlabel("")
+plt.legend(loc = "lower left")
+plt.show()
